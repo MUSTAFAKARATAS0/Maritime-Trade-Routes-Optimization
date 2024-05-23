@@ -54,7 +54,7 @@ def plot_3d_distance(lat1, lon1, lat2, lon2):
 def calculate_distance():
     try:
         lat1 = float(entry_lat1.get())
-        lon1 = float(entry_lon1.get())
+        lon1 = float(entry_lon1.get())   
         lat2 = float(entry_lat2.get())
         lon2 = float(entry_lon2.get())
         

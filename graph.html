@@ -1,84 +1,140 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="tr">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Interactive 3D World Map</title>
+    <title>Etkileşimli 3D Dünya Haritası</title>
+    <!-- D3.js ve TopoJSON kütüphanelerini dahil ediyoruz -->
     <script src="https://d3js.org/d3.v7.min.js"></script>
     <script src="https://unpkg.com/topojson-client@3"></script>
     <style>
+        body {
+            font-family: Arial, sans-serif;
+        }
         svg {
             display: block;
             margin: auto;
         }
         .connector {
             fill: none;
-            stroke: #333;
-            stroke-width: 1.5px;
-            stroke-opacity: 0.5;
+            stroke: #007BFF;
+            stroke-width: 2px;
+            stroke-opacity: 0.75;
         }
         .country-label {
             font-size: 14px;
             fill: #333;
         }
         .country-option {
-            font-size: 12px;
+            font-size: 14px;
             cursor: pointer;
+            padding: 5px 10px;
+            margin: 2px 0;
+            border-radius: 4px;
+            transition: background-color 0.3s, color 0.3s;
         }
         .country-option:hover {
-            fill: blue;
+            background-color: #e0e0e0;
+            color: #000;
         }
         .selected-country {
-            fill: red;
+            background-color: #007BFF;
+            color: white;
         }
         .port-label {
             font-size: 10px;
             fill: black;
         }
+        .selected-port-label {
+            fill: red;
+        }
+        #sidebar {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            background: white;
+            padding: 10px;
+            border: 1px solid #ccc;
+            border-radius: 8px;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+        }
+        #country-list, #port-list {
+            margin-bottom: 10px;
+        }
+        .port-option {
+            font-size: 12px;
+            padding: 5px 10px;
+            margin: 2px 0;
+            cursor: pointer;
+            border-radius: 4px;
+            transition: background-color 0.3s, color 0.3s;
+        }
+        .port-option:hover {
+            background-color: #f0f0f0;
+            color: #000;
+        }
+        .port-option.selected-port-label {
+            background-color: #dc3545;
+            color: white;
+        }
+        .sea {
+            fill: #add8e6; /* Deniz rengi */
+        }
     </style>
 </head>
 <body>
     <svg id="map" width="960" height="500"></svg>
+    <div id="sidebar">
+        <div id="country-list"><h3>Ülkeler</h3></div>
+        <div id="port-list"><h3>Limanlar</h3></div>
+    </div>
 
     <script>
+        // SVG öğesini seçiyoruz
         const svg = d3.select("#map");
 
+        // SVG'nin genişlik ve yükseklik değerlerini alıyoruz
         const width = +svg.attr("width");
         const height = +svg.attr("height");
 
+        // Harita projeksiyonunu tanımlıyoruz
         const projection = d3.geoOrthographic()
-            .rotate([0, 0]) // Başlangıçta dönme açısını 0 olarak ayarla
-            .scale(250) // Ölçeği 500 olarak ayarla (büyütme)
-            .translate([width / 2, height / 2]);
+            .rotate([0, 0]) // Başlangıç rotasyonu
+            .scale(250) // Ölçek
+            .translate([width / 2, height / 2]); // Merkez noktası
 
-        const path = d3.geoPath()
-            .projection(projection);
+        // GeoPath fonksiyonunu projeksiyon ile oluşturuyoruz
+        const path = d3.geoPath().projection(projection);
 
+        // SVG içerisine bir grup ekliyoruz
         const g = svg.append("g");
 
+        // Ülke verilerini JSON formatında yüklüyoruz
         d3.json("https://raw.githubusercontent.com/nvkelso/natural-earth-vector/master/geojson/ne_110m_admin_0_countries.geojson")
             .then(data => {
                 const countries = data;
 
+                // Ülke sınırlarını çizen path elemanlarını ekliyoruz
                 g.selectAll("path")
                     .data(countries.features)
                     .enter().append("path")
                     .attr("d", path)
-                    .attr("fill", "lightgrey")
+                    .attr("fill", d => d.properties.name === "Antarctica" ? "#f0f0f0" : "#add8e6") // Antarktika hariç tüm denizleri mavi yap
                     .attr("stroke", "white");
 
+                // Liman verilerini CSV formatında yüklüyoruz
                 d3.csv("ag2.csv")
                     .then(data => {
-                        // Verileri düzeltebiliriz
+                        // Verileri uygun formatlara dönüştürüyoruz
                         data.forEach(d => {
                             d.Latitude = parseFloat(d.Latitude.replace(/,/g, '.').trim());
                             d.Longitude = parseFloat(d.Longitude.replace(/,/g, '.').trim());
                         });
 
-                        // Ülke bazında limanları gruplayalım
+                        // Limanları ülkelere göre gruplayarak bir harita oluşturuyoruz
                         const portsByCountry = d3.group(data, d => d.Country.trim());
 
-                        // Limanları ve bağları ekle
+                        // Limanları harita üzerinde kırmızı noktalar olarak çiziyoruz
                         const ports = g.selectAll("circle")
                             .data(data)
                             .enter().append("circle")
@@ -88,7 +144,7 @@
                             .attr("fill", "red")
                             .attr("opacity", 0.75);
 
-                        // Liman adları
+                        // Liman etiketlerini ekliyoruz
                         const portLabels = g.selectAll(".port-label")
                             .data(data)
                             .enter().append("text")
@@ -97,36 +153,33 @@
                             .attr("y", d => projection([d.Longitude, d.Latitude])[1])
                             .text(d => d.Name.trim());
 
-                        // Ülke seçenekleri
+                        // Ülke listesi elemanlarını kenar çubuğuna ekliyoruz
+                        const countryList = d3.select("#country-list");
                         const countriesList = Array.from(portsByCountry.keys());
-                        const countryLabel = svg.append("text")
-                            .attr("class", "country-label")
-                            .attr("x", 10)
-                            .attr("y", 20)
-                            .text("Country:")
-                        const countryOptions = svg.append("g")
-                            .attr("transform", "translate(70, 20)")
-                            .selectAll(".country-option")
+
+                        countryList.selectAll("div")
                             .data(countriesList)
-                            .enter().append("text")
+                            .enter().append("div")
                             .attr("class", "country-option")
-                            .attr("x", 0)
-                            .attr("y", (d, i) => i * 20)
                             .text(d => d)
                             .on("click", updatePorts);
 
-                        // Fare olaylarını dinle
+                        // Liman listesi elemanları için değişken oluşturuyoruz
+                        const portList = d3.select("#port-list");
+                        let selectedPorts = [];
+
+                        // Haritayı döndürebilmek için sürükleme olayını ekliyoruz
                         svg.call(d3.drag()
                             .on("start", dragStart)
                             .on("drag", dragMove)
                         );
 
                         function dragStart() {
-                            // Fare sürükleme başladığında yapılacaklar
+                            // Sürükleme başlangıcında yapılacak işlemler
                         }
 
                         function dragMove(event) {
-                            // Fare sürüklendiğinde yapılacaklar
+                            // Haritayı sürüklerken yapılan işlemler
                             const rotate = projection.rotate();
                             const k = height / 2 / projection.scale();
                             projection.rotate([
@@ -136,28 +189,128 @@
                             g.selectAll("path").attr("d", path);
                             ports.attr("cx", d => projection([d.Longitude, d.Latitude])[0])
                                 .attr("cy", d => projection([d.Longitude, d.Latitude])[1]);
-                            g.selectAll(".connector")
-                                .attr("x1", d => projection([d[0].Longitude, d[0].Latitude])[0])
-                                .attr("y1", d => projection([d[0].Longitude, d[0].Latitude])[1])
-                                .attr("x2", d => projection([d[1].Longitude, d[1].Latitude])[0])
-                                .attr("y2", d => projection([d[1].Longitude, d[1].Latitude])[1]);
+                            portLabels.attr("x", d => projection([d.Longitude, d.Latitude])[0] + 10)
+                                .attr("y", d => projection([d.Longitude, d.Latitude])[1]);
+                            updateConnectors();
                         }
 
-                        // Limanları güncelle
+                        // Ülke seçildiğinde limanları günceller
                         function updatePorts(event, d) {
                             const selectedCountry = d;
+                            const selectedPortsData = portsByCountry.get(selectedCountry) || [];
+
                             ports.attr("display", function (d) {
-                                return d.Country.trim() === selectedCountry ? "block" : "none";
+                                return selectedPortsData.includes(d) ? "block" : "none";
                             });
                             portLabels.attr("display", function (d) {
-                                return d.Country.trim() === selectedCountry ? "block" : "none";
+                                return selectedPortsData.includes(d) ? "block" : "none";
                             });
-                            // Ülke etiketlerinin rengini güncelle
-                            countryOptions.classed("selected-country", function (c) {
+                            d3.selectAll(".country-option").classed("selected-country", function (c) {
                                 return c === selectedCountry;
                             });
+
+                            const portListItems = portList.selectAll("div")
+                                .data(selectedPortsData, d => d.Name.trim());
+
+                            portListItems.enter().append("div")
+                                .attr("class", "port-option")
+                                .text(d => d.Name.trim())
+                                .on("click", function(event, d) {
+                                    selectPort(d);
+                                });
+
+                            portListItems.exit().remove();
                         }
 
+                        // Liman seçimini yönetir
+                        function selectPort(selectedPort) {
+                            if (selectedPorts.includes(selectedPort)) {
+                                selectedPorts = selectedPorts.filter(port => port !== selectedPort);
+                            } else {
+                                if (selectedPorts.length >= 2) {
+                                    selectedPorts.shift();
+                                }
+                                selectedPorts.push(selectedPort);
+                            }
+
+                            ports.attr("display", function (d) {
+                                return selectedPorts.includes(d) ? "block" : "none";
+                            });
+
+                            portLabels.attr("display", function (d) {
+                                return selectedPorts.includes(d) ? "block" : "none";
+                            }).classed("selected-port-label", function (d) {
+                                return selectedPorts.includes(d);
+                            });
+
+                            g.selectAll(".connector").remove();
+
+                            if (selectedPorts.length === 2) {
+                                const [port1, port2] = selectedPorts;
+                                drawConnector(port1, port2);
+                            }
+                        }
+
+                        // İki liman arasında bağlantı çizgisi çizer
+                        function drawConnector(port1, port2) {
+                            const coords1 = projection([port1.Longitude, port1.Latitude]);
+                            const coords2 = projection([port2.Longitude, port2.Latitude]);
+
+                            const distance = haversineDistance(port1.Latitude, port1.Longitude, port2.Latitude, port2.Longitude);
+
+                            g.append("line")
+                                .attr("class", "connector")
+                                .attr("x1", coords1[0])
+                                .attr("y1", coords1[1])
+                                .attr("x2", coords2[0])
+                                .attr("y2", coords2[1])
+                                .attr("stroke", "blue")
+                                .attr("stroke-width", 2);
+
+                            g.append("text")
+                                .attr("class", "connector-text")
+                                .attr("x", (coords1[0] + coords2[0]) / 2)
+                                .attr("y", (coords1[1] + coords2[1]) / 2)
+                                .attr("dy", -5)
+                                .attr("text-anchor", "middle")
+                                .attr("fill", "black")
+                                .text(`${distance.toFixed(2)} km`);
+                        }
+
+                        // Harita döndürüldüğünde bağlantı çizgilerini günceller
+                        function updateConnectors() {
+                            if (selectedPorts.length === 2) {
+                                const [port1, port2] = selectedPorts;
+                                const coords1 = projection([port1.Longitude, port1.Latitude]);
+                                const coords2 = projection([port2.Longitude, port2.Latitude]);
+
+                                g.selectAll(".connector")
+                                    .attr("x1", coords1[0])
+                                    .attr("y1", coords1[1])
+                                    .attr("x2", coords2[0])
+                                    .attr("y2", coords2[1]);
+
+                                g.selectAll(".connector-text")
+                                    .attr("x", (coords1[0] + coords2[0]) / 2)
+                                    .attr("y", (coords1[1] + coords2[1]) / 2);
+                            }
+                        }
+
+                        // İki nokta arasındaki büyük çember mesafesini hesaplar
+                        function haversineDistance(lat1, lon1, lat2, lon2) {
+                            const R = 6371.0;
+                            const toRad = angle => angle * (Math.PI / 180);
+
+                            const dLat = toRad(lat2 - lat1);
+                            const dLon = toRad(lon2 - lon1);
+
+                            const a = Math.sin(dLat / 2) ** 2 +
+                                Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) *
+                                Math.sin(dLon / 2) ** 2;
+                            const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+
+                            return R * c;
+                        }
                     });
             });
     </script>
